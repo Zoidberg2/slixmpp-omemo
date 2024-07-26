@@ -1,0 +1,10 @@
+Module: xep_0384
+================
+
+.. automodule:: slixmpp_omemo.xep_0384
+    :members:
+    :special-members:
+    :private-members:
+    :undoc-members:
+    :member-order: bysource
+    :show-inheritance:
