@@ -1,3 +1,8 @@
+[![PyPI](https://img.shields.io/pypi/v/slixmpp_omemo.svg)](https://pypi.org/project/slixmpp_omemo/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/slixmpp_omemo.svg)](https://pypi.org/project/slixmpp_omemo/)
+[![Build Status](https://github.com/Syndace/slixmpp-omemo/actions/workflows/test-and-publish.yml/badge.svg)](https://github.com/Syndace/slixmpp-omemo/actions/workflows/test-and-publish.yml)
+[![Documentation Status](https://readthedocs.org/projects/slixmpp-omemo/badge/?version=latest)](https://slixmpp-omemo.readthedocs.io/)
+
 # slixmpp-omemo - Slixmpp OMEMO plugin #
 
 A plugin for slixmpp offering the [OMEMO Multi-End Message and Object Encryption protocol](https://xmpp.org/extensions/xep-0384.html), based on [python-omemo](https://github.com/Syndace/python-omemo).
