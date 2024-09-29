@@ -34,7 +34,8 @@ from slixmpp.plugins.base import BasePlugin
 from slixmpp.plugins.xep_0004 import Form  # type: ignore[attr-defined]
 from slixmpp.plugins.xep_0060 import XEP_0060  # type: ignore[attr-defined]
 from slixmpp.plugins.xep_0163 import XEP_0163
-from slixmpp.stanza import Message, Iq
+from slixmpp.roster import RosterNode  # type: ignore[attr-defined]
+from slixmpp.stanza import Iq, Message, Presence
 
 from .base_session_manager import BaseSessionManager, TrustLevel
 
@@ -562,6 +563,8 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
         xmpp.add_event_handler("twomemo_device_list_publish", self._on_device_list_update)
         xmpp.add_event_handler("oldmemo_device_list_publish", self._on_device_list_update)
 
+        xmpp.add_event_handler("changed_subscription", self._on_subscription_changed)
+
         xep_0163.add_interest(TWOMEMO_DEVICE_LIST_NODE)
         xep_0163.add_interest(OLDMEMO_DEVICE_LIST_NODE)
 
@@ -726,6 +729,113 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
 
         await session_manager.update_device_list(namespace, msg["from"].bare, device_list)
 
+    async def _on_subscription_changed(self, presence: Presence) -> None:
+        """
+        Callback to handle presence subscription changes.
+
+        Args:
+            presence: The presence stanza triggering this callback.
+        """
+
+        # TODO: There is currently no way to untrack a JID, for example in case an account is deleted or
+        # blocked.
+
+        jid = JID(presence["from"].bare)
+
+        roster: RosterNode = self.xmpp.client_roster
+
+        pep_enabled = jid in roster and roster[jid]["subscription"] == "both"
+        subscribed = (await self.storage.load_primitive(f"/slixmpp/subscribed/{jid}", bool)).maybe(None)
+
+        if subscribed is None:
+            # This JID is not tracked.
+            return
+
+        # Remove manual subscriptions if PEP is enabled now
+        if pep_enabled and subscribed:
+            await self._unsubscribe(jid)
+
+        # Add a manual subscription if PEP is disabled now
+        if not pep_enabled and not subscribed:
+            await self._subscribe(jid)
+
+    async def _subscribe(self, jid: JID) -> None:
+        """
+        Manually subscribe to the device list pubsub nodes of the JID and track the subscription status.
+
+        Args:
+            jid: The JID whose device lists to manually subscribe to. Can be a bare (aka "userhost") JID but
+                doesn't have to.
+        """
+
+        jid = JID(jid.bare)
+
+        xep_0060: XEP_0060 = self.xmpp["xep_0060"]
+        xep_0060.subscribe(jid, OLDMEMO_DEVICE_LIST_NODE)
+        xep_0060.subscribe(jid, TWOMEMO_DEVICE_LIST_NODE)
+
+        await self.storage.store(f"/slixmpp/subscribed/{jid}", True)
+
+    async def _unsubscribe(self, jid: JID) -> None:
+        """
+        Manually unsubscribe from the device list pubsub nodes of the JID and track the subscription status.
+
+        Args:
+            jid: The JID whose device lists to manually unsubscribe from. Can be a bare (aka "userhost") JID
+                but doesn't have to.
+        """
+
+        jid = JID(jid.bare)
+
+        xep_0060: XEP_0060 = self.xmpp["xep_0060"]
+        xep_0060.unsubscribe(jid, OLDMEMO_DEVICE_LIST_NODE)
+        xep_0060.unsubscribe(jid, TWOMEMO_DEVICE_LIST_NODE)
+
+        await self.storage.store(f"/slixmpp/subscribed/{jid}", False)
+
+    async def refresh_device_lists(self, jid: JID, force_download: bool = False) -> None:
+        """
+        Ensure that up-to-date device lists for the JID are cached. This is done automatically by
+        :meth:`encrypt_message`; you shouldn't need to manually call this method.
+
+        Args:
+            jid: The JID whose device lists to refresh. Can be a bare (aka "userhost") JID but doesn't have
+                to.
+            force_download: Force downloading the device list even if pubsub/PEP are enabled to automatically
+                keep the cached device lists up-to-date.
+
+        Raises:
+            Exception: all exceptions raised by :meth:`SessionManager.refresh_device_lists` are forwarded
+                as-is.
+        """
+
+        jid = JID(jid.bare)
+
+        session_manager = await self.get_session_manager()
+        storage = self.storage
+
+        roster: RosterNode = self.xmpp.client_roster
+
+        pep_enabled = jid in roster and roster[jid]["subscription"] == "both"
+        subscribed = (await storage.load_primitive(f"/slixmpp/subscribed/{jid}", bool)).maybe(False)
+
+        if pep_enabled:
+            # If PEP is enabled, return unless the download is forced
+            if not force_download:
+                return
+        else:
+            # If PEP is not enabled, check whether manual subscription is enabled instead
+            if subscribed:
+                # If manual subscription is enabled, return unless the download is forced
+                if not force_download:
+                    return
+            else:
+                # Otherwise, manually subscribe to stay up-to-date automatically in the future
+                await self._subscribe(jid)
+
+        # Manually force-download all device lists
+        await session_manager.refresh_device_lists(jid.bare)
+
     async def encrypt_message(
         self,
         stanza: Message,
@@ -738,8 +848,8 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
 
         Args:
             stanza: The stanza to encrypt.
-            recipient_jids: The JID of the recipients. Can be a bare (aka "userhost") JIDs but doesn't have
-                to. A single JID can be used.
+            recipient_jids: The JID of the recipients. Can be bare (aka "userhost") JIDs but doesn't have to.
+                A single JID can be used.
             identifier: A value that is passed on to :meth:`_devices_blindly_trusted` and
                 :meth:`_prompt_manual_trust` in case a trust decision is required for any of the recipient
                 devices. This value is not processed or altered, it is simply passed through. Refer to the
@@ -777,6 +887,10 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
             recipient_jids = { recipient_jids }
         if not recipient_jids:
             raise ValueError("At least one JID must be specified")
+
+        # Make sure all recipient device lists are available
+        for recipient_jid in recipient_jids:
+            await self.refresh_device_lists(recipient_jid)
 
         recipient_bare_jids = frozenset({ recipient_jid.bare for recipient_jid in recipient_jids })
 

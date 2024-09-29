@@ -59,7 +59,7 @@ setup(
     packages=find_packages(exclude=["tests"]),
     install_requires=[
         "slixmpp>=1.8.0,<2",
-        "OMEMO>=1.0.4,<2",
+        "OMEMO>=1.1.0,<2",
         "Oldmemo[xml]>=1.0.4,<2",
         "Twomemo[xml]>=1.0.4,<2",
         "typing-extensions>=4.4.0"
