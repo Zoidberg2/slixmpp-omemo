@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- Use only strings for data form values used in pubsub publish options and node configuration
+
 ## [1.0.0] - 26th of July, 2024
 
 ### Added

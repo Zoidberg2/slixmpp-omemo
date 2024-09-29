@@ -79,7 +79,7 @@ async def _publish_item_and_configure_node(
     node: str,
     item: ET.Element,
     item_id: str,
-    options: Dict[str, Any]
+    options: Dict[str, str]
 ) -> None:
     """
     Publishes an item and makes sure that the node is configured correctly.
@@ -172,7 +172,7 @@ def _make_session_manager(xmpp: BaseXMPP, xep_0384: "XEP_0384") -> Type[SessionM
                         options={
                             "pubsub#access_model": "open",
                             "pubsub#persist_items": "true",
-                            "pubsub#max_items": 1
+                            "pubsub#max_items": "1"
                         }
                     )
                 except Exception:  # pylint: disable=broad-exception-caught
@@ -316,7 +316,7 @@ def _make_session_manager(xmpp: BaseXMPP, xep_0384: "XEP_0384") -> Type[SessionM
                     options={
                         "pubsub#access_model": "open",
                         "pubsub#persist_items": "true",
-                        "pubsub#max_items": 1
+                        "pubsub#max_items": "1"
                     }
                 )
             except Exception:  # pylint: disable=broad-exception-caught
