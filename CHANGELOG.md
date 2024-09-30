@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- Emit an event when OMEMO has initialized
+
 ### Fixed
 - Use only strings for data form values used in pubsub publish options and node configuration
 

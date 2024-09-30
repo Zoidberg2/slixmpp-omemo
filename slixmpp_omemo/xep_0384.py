@@ -523,6 +523,11 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
     The plugin does not treat the protocol versions as separate encryption mechanisms, instead it manages all
     versions transparently with no manual intervention required.
 
+    Certain initialization tasks such as a data consistency check are transparently ran in the background when
+    the plugin is loaded. The ``omemo_initialized`` event is fired when those initial background tasks are
+    done. Waiting for this event can be useful e.g. in automated testing environments to be sure that a test
+    client has generated and uploaded its OMEMO data before continuing.
+
     Tip:
         A lot of essential functionality is accessible via the `SessionManager` instance that is returned by
         :meth:`get_session_manager`. The session manager is the core of the underlying OMEMO library and
@@ -666,6 +671,7 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
             session_manager = await self.__session_manager_task
             self.__session_manager = session_manager
             self.__session_manager_task = None
+            self.xmpp.event("omemo_initialized")
             return session_manager
 
         # If the session manager is currently being built, wait for it to be done
