@@ -215,8 +215,9 @@ class OmemoEchoClient(ClientXMPP):
         xep_0384: XEP_0384 = self["xep_0384"]
 
         if isinstance(reply, str):
+            reply_body = reply
             reply = self.make_message(mto=mto, mtype=mtype)
-            reply["body"] = reply
+            reply["body"] = reply_body
 
         reply.set_to(mto)
         reply.set_from(self.boundjid)
