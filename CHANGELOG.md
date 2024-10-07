@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Fixed
 - Use only strings for data form values used in pubsub publish options and node configuration
 - Ignore messages without body in the echo bot example
+- Allow passing text content to the echo bot example's `encrypted_reply` method as advertized
 
 ## [1.0.0] - 26th of July, 2024
 
