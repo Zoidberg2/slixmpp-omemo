@@ -824,37 +824,6 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
 
         await self.storage.store(f"/slixmpp/subscribed/{jid.bare}/{namespace}", False)
 
-    async def _fetch_subscription_status(self, namespace: str, jid: JID) -> Optional[bool]:
-        """
-        Fetches the subscription status to the device list pubsub node of the JID, updates the status in
-        storage and returns it.
-
-        Args:
-            namespace: The OMEMO version namespace (not the node).
-            jid: The JID whose device list to manually unsubscribe from. Can be a bare (aka "userhost") JID
-                but doesn't have to.
-
-        Returns:
-            The updated subscription status. Can still be ``None`` if the server doesn't support fetching
-            subscription status.
-        """
-
-        jid = JID(jid.bare)
-
-        node = {
-            twomemo.twomemo.NAMESPACE: TWOMEMO_DEVICE_LIST_NODE,
-            oldmemo.oldmemo.NAMESPACE: OLDMEMO_DEVICE_LIST_NODE
-        }.get(namespace, None)
-
-        if node is None:
-            raise UnknownNamespace(f"Unknown namespace during device list unsubscription: {namespace}")
-
-        # xep_0060: XEP_0060 = self.xmpp["xep_0060"]
-
-        # TODO
-
-        return None
-
     async def refresh_device_lists(self, jids: Set[JID], force_download: bool = False) -> None:
         """
         Ensure that up-to-date device lists for the JIDs are cached. This is done automatically by
@@ -897,13 +866,11 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
                         bool
                     )).maybe(None)
 
-                    if subscribed is None:
-                        # Subscription status unknown, ask the server
-                        subscribed = await self._fetch_subscription_status(namespace, jid)
-
                     if not subscribed:
-                        # If not subscribed already, manually subscribe to stay up-to-date automatically in
-                        # the future
+                        # If not subscribed already (or the subscription status is unknown), manually
+                        # subscribe to stay up-to-date automatically in the future. This trusts that servers,
+                        # even if they support multi-subscribe, would not generate exact duplicate
+                        # subscriptions with differing subscription ids.
                         await self._subscribe(namespace, jid)
                         refresh_namespaces.add(namespace)
 
