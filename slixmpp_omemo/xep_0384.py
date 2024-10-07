@@ -743,6 +743,8 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
 
         pep_enabled = jid in roster and roster[jid]["subscription"] == "both"
 
+        log.debug(f"Subscription changed for {jid}; PEP enabled: {pep_enabled}")
+
         for namespace in [ twomemo.twomemo.NAMESPACE, oldmemo.oldmemo.NAMESPACE ]:
             subscribed = (await self.storage.load_primitive(
                 f"/slixmpp/subscribed/{jid}/{namespace}",
@@ -773,6 +775,8 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
 
         jid = JID(jid.bare)
 
+        log.debug(f"Manually subscribing to {namespace} device list for {jid}")
+
         node = {
             twomemo.twomemo.NAMESPACE: TWOMEMO_DEVICE_LIST_NODE,
             oldmemo.oldmemo.NAMESPACE: OLDMEMO_DEVICE_LIST_NODE
@@ -784,7 +788,7 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
         xep_0060: XEP_0060 = self.xmpp["xep_0060"]
 
         try:
-            xep_0060.subscribe(jid, node)
+            await xep_0060.subscribe(jid, node)
         except IqError as e:
             # Failure to subscribe is non-critical here, simply debug log the error (and don't update the
             # subscription status).
@@ -804,6 +808,8 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
 
         jid = JID(jid.bare)
 
+        log.debug(f"Manually unsubscribing from {namespace} device list for {jid}")
+
         node = {
             twomemo.twomemo.NAMESPACE: TWOMEMO_DEVICE_LIST_NODE,
             oldmemo.oldmemo.NAMESPACE: OLDMEMO_DEVICE_LIST_NODE
@@ -815,7 +821,7 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
         xep_0060: XEP_0060 = self.xmpp["xep_0060"]
 
         try:
-            xep_0060.unsubscribe(jid, node)
+            await xep_0060.unsubscribe(jid, node)
         except IqError as e:
             # Don't really care about any of the possible Iq error cases:
             # https://xmpp.org/extensions/xep-0060.html#subscriber-unsubscribe-error
@@ -880,7 +886,10 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
 
             for namespace in refresh_namespaces:
                 # Force-download the device lists that need a manual refresh
-                await session_manager.refresh_device_list(namespace, jid.bare)
+                try:
+                    await session_manager.refresh_device_list(namespace, jid.bare)
+                except omemo.DeviceListDownloadFailed as e:
+                    log.debug(f"Couldn't manually fetch {namespace} device list, probably doesn't exist: {e}")
 
     async def encrypt_message(
         self,
