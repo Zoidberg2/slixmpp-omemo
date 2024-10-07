@@ -850,6 +850,10 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
         for jid in jids:
             jid = JID(jid.bare)
 
+            if jid.bare == self.xmpp.boundjid.bare:
+                # Skip ourselves
+                continue
+
             # Track which namespaces require a manual refresh
             refresh_namespaces: Set[str] = \
                 { twomemo.twomemo.NAMESPACE, oldmemo.oldmemo.NAMESPACE } if force_download else set()
