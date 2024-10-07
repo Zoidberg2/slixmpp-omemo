@@ -165,6 +165,10 @@ class OmemoEchoClient(ClientXMPP):
 
         namespace = xep_0384.is_encrypted(stanza)
         if namespace is None:
+            if not stanza["body"]:
+                # This is the case for things like read markers, ignore those.
+                return
+
             self.plain_reply(
                 mto,
                 mtype,
@@ -178,6 +182,10 @@ class OmemoEchoClient(ClientXMPP):
             message, device_information = await xep_0384.decrypt_message(stanza)
 
             log.debug(f"Information about sender: {device_information}")
+
+            if not message["body"]:
+                # This is the case for things like read markers, ignore those.
+                return
 
             await self.encrypted_reply(mto, mtype, message)
         except Exception as e:  # pylint: disable=broad-exception-caught
