@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.1] - 8th of October, 2024
+
 ### Fixed
 - Load the twomemo backend even though SCE is not supported
 - Treat malformed device list as empty instead of an unrecoverable error
@@ -27,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/Syndace/slixmpp-omemo/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/Syndace/slixmpp-omemo/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/Syndace/slixmpp-omemo/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Syndace/slixmpp-omemo/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Syndace/slixmpp-omemo/releases/tag/v1.0.0
