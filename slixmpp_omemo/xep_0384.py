@@ -479,12 +479,11 @@ async def _prepare(
 
     session_manager = await _make_session_manager(xmpp, xep_0384).create(
         [
-            # Uncomment when SCE is available
-            # twomemo.Twomemo(
-            #     storage,
-            #     max_num_per_session_skipped_keys,
-            #     max_num_per_message_skipped_keys
-            # ),
+            twomemo.Twomemo(
+                storage,
+                max_num_per_session_skipped_keys,
+                max_num_per_message_skipped_keys
+            ),
             oldmemo.Oldmemo(
                 storage,
                 max_num_per_session_skipped_keys,
@@ -1065,7 +1064,7 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
 
         if message.namespace == twomemo.twomemo.NAMESPACE:
             # Do SCE unpacking here
-            raise NotImplementedError("SCE not supported yet")
+            raise NotImplementedError(f"SCE not supported yet. Plaintext: {plaintext}")
 
         if message.namespace == oldmemo.oldmemo.NAMESPACE:
             stanza = copy(stanza)
