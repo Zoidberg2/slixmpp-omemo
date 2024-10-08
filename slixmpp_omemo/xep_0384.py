@@ -154,8 +154,22 @@ def _make_session_manager(xmpp: BaseXMPP, xep_0384: "XEP_0384") -> Type[SessionM
                             "pubsub#max_items": "max"
                         }
                     )
-                except Exception as e:
-                    raise BundleUploadFailed(f"Bundle upload failed: {bundle}") from e
+                except Exception:  # pylint: disable=broad-exception-caught
+                    # Try again without MAX_ITEMS set, which is not strictly necessary.
+                    try:
+                        await _publish_item_and_configure_node(
+                            xep_0060,
+                            our_bare_jid,
+                            node,
+                            item,
+                            item_id=str(bundle.device_id),
+                            options={
+                                "pubsub#access_model": "open",
+                                "pubsub#persist_items": "true"
+                            }
+                        )
+                    except Exception as e:
+                        raise BundleUploadFailed(f"Bundle upload failed: {bundle}") from e
 
                 return
 
