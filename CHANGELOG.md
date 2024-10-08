@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 - Load the twomemo backend even though SCE is not supported
+- Treat malformed device list as empty instead of an unrecoverable error
 
 ## [1.1.0] - 7th of October, 2024
 

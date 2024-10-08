@@ -385,6 +385,12 @@ def _make_session_manager(xmpp: BaseXMPP, xep_0384: "XEP_0384") -> Type[SessionM
                     return twomemo.etree.parse_device_list(device_list_elt)
                 if namespace == oldmemo.oldmemo.NAMESPACE:
                     return oldmemo.etree.parse_device_list(device_list_elt)
+            except XMLSchemaValidationError as e:
+                log.warning(
+                    f"Malformed device list for {bare_jid} under namespace {namespace}, treating as empty",
+                    exc_info=e
+                )
+                return {}
             except Exception as e:
                 raise DeviceListDownloadFailed(
                     f"Device list download failed for {bare_jid} under namespace {namespace}"
