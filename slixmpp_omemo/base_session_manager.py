@@ -7,7 +7,7 @@ from omemo.session_manager import SessionManager, UnknownTrustLevel
 from omemo.types import DeviceInformation, TrustLevel as CoreTrustLevel
 
 
-__all__ = [  # pylint: disable=unused-variable
+__all__ = [
     "TrustLevel",
     "BaseSessionManager"
 ]

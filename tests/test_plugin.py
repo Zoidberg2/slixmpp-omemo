@@ -3,12 +3,12 @@ import pytest
 import slixmpp_omemo
 
 
-__all__ = [  # pylint: disable=unused-variable
+__all__ = [
     "test_placeholder"
 ]
 
 
-pytestmark = pytest.mark.asyncio  # pylint: disable=unused-variable
+pytestmark = pytest.mark.asyncio
 
 
 async def test_placeholder() -> None:

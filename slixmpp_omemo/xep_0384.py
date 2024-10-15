@@ -40,7 +40,7 @@ from slixmpp.stanza import Iq, Message, Presence
 from .base_session_manager import BaseSessionManager, TrustLevel
 
 
-__all__ = [  # pylint: disable=unused-variable
+__all__ = [
     "XEP_0384"
 ]
 
@@ -134,7 +134,7 @@ def _make_session_manager(xmpp: BaseXMPP, xep_0384: "XEP_0384") -> Type[SessionM
     our_bare_jid: str = xmpp.boundjid.bare
     xep_0060: XEP_0060 = xmpp["xep_0060"]
 
-    class SessionManagerImpl(BaseSessionManager):  # pylint: disable=missing-class-docstring
+    class SessionManagerImpl(BaseSessionManager):
         @staticmethod
         async def _upload_bundle(bundle: omemo.Bundle) -> None:
             if isinstance(bundle, twomemo.twomemo.BundleImpl):
