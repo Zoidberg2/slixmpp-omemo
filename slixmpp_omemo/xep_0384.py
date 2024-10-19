@@ -15,6 +15,7 @@ from omemo.session_manager import (
     DeviceListDownloadFailed,
     DeviceListUploadFailed,
     MessageSendingFailed,
+    SenderNotFound,
     UnknownNamespace
 )
 from omemo.storage import Storage
@@ -32,6 +33,7 @@ from slixmpp.exceptions import IqError
 from slixmpp.jid import JID
 from slixmpp.plugins.base import BasePlugin
 from slixmpp.plugins.xep_0004 import Form  # type: ignore[attr-defined]
+from slixmpp.plugins.xep_0045 import XEP_0045  # type: ignore[attr-defined]
 from slixmpp.plugins.xep_0060 import XEP_0060  # type: ignore[attr-defined]
 from slixmpp.plugins.xep_0163 import XEP_0163
 from slixmpp.roster import RosterNode  # type: ignore[attr-defined]
@@ -1032,6 +1034,7 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
 
         Raises:
             ValueError: in case there is malformed data not caught be the XML schema validation.
+            ValueError: in case a groupchat message is passed but XEP-0045 is not loaded.
             XMLSchemaValidationError: in case the element does not conform to the XML schema given in the
                 specification.
             SenderNotFound: in case the public information about the sending device could not be found or is
@@ -1041,7 +1044,21 @@ class XEP_0384(BasePlugin, metaclass=ABCMeta):  # pylint: disable=invalid-name
 
         xmpp: BaseXMPP = self.xmpp
 
-        sender_bare_jid = stanza.get_from().bare
+        from_jid: JID = stanza.get_from()
+        sender_bare_jid: str
+
+        if stanza.get_type() == "groupchat":
+            xep_0045: Optional[XEP_0045] = xmpp["xep_0045"]
+            if not xep_0045:
+                raise ValueError("Attempt to decrypt groupchat message but XEP-0045 is not loaded")
+
+            real_jid = xep_0045.get_jid_property(JID(from_jid.bare), from_jid.resource, "jid")
+            if real_jid is None:
+                raise SenderNotFound(f"Couldn't find real JID of sender from groupchat JID {from_jid}")
+
+            sender_bare_jid = JID(real_jid).bare
+        else:
+            sender_bare_jid = from_jid.bare
 
         session_manager = await self.get_session_manager()
 
