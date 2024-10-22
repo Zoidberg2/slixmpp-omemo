@@ -368,15 +368,27 @@ def _make_session_manager(xmpp: BaseXMPP, xep_0384: "XEP_0384") -> Type[SessionM
                 raise UnknownNamespace(f"Unknown namespace: {namespace}")
 
             try:
-                items_iq = await xep_0060.get_items(JID(bare_jid), node)
-            except Exception as e:
+                items_iq = await xep_0060.get_items(JID(bare_jid), node, max_items=1)
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 if isinstance(e, IqError):
                     if e.condition == "item-not-found":
                         return {}
 
-                raise DeviceListDownloadFailed(
-                    f"Device list download failed for {bare_jid} under namespace {namespace}"
-                ) from e
+                log.warning(
+                    f"Device list download failed for {bare_jid} under namespace {namespace}, trying again"
+                    f" without max_items"
+                )
+
+                try:
+                    items_iq = await xep_0060.get_items(JID(bare_jid), node)
+                except Exception as ex:
+                    if isinstance(ex, IqError):
+                        if ex.condition == "item-not-found":
+                            return {}
+
+                    raise DeviceListDownloadFailed(
+                        f"Device list download failed for {bare_jid} under namespace {namespace}"
+                    ) from ex
 
             items = items_iq["pubsub"]["items"]
 

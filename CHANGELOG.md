@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+- Attempt device list download with max_items before falling back to full download
+
 ## [1.2.1] - 19th of October, 2024
 
 ### Fixed
