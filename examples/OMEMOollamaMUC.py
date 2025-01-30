@@ -123,9 +123,9 @@ class OmemoEchoClient(ClientXMPP):
         super().__init__(jid, password)
         self.allowed_users = allowed_users
         self.llama_server_url = llama_server_url
-        self.conversation_history = []
-        self.max_history_length = 1
-        self.llm = OllamaLLM(model="qwen2.5-coder")
+        self.mucconversation_history = {}
+        self.max_history_length = 20
+        self.llm = OllamaLLM(model="deepseek-r1:7b")
         self.room = room
         self.nick = nick
         self.add_event_handler("session_start", self.start)
@@ -238,14 +238,32 @@ class OmemoEchoClient(ClientXMPP):
         return affiliations
 
     async def message_handler(self, stanza: Message) -> None:
-
+        config = {
+            "model": "deepseek-r1:7b",
+            "device": "gpu",
+            "num_gpu": 1,
+            "num_thread": 8,
+            "batch_size": 32,
+            "quantization": {
+                "mode": "int8"
+            },
+            "cache": {
+                "type": "redis",
+                "capacity": "12gb"
+            },
+            "runtime": {
+                "compute_type": "float16",
+                "tensor_parallel": True
+            }
+        }
         if stanza["id"] in self.sent_message_ids:
             return
 
         if not stanza["body"]:
             return
-
-
+        if stanza["from"] not in self.allowed_users:
+            logging.warning(f"Received message from unauthorized user {stanza['from']}")
+            return
         xep_0384: XEP_0384 = self["xep_0384"]
 
         mto = stanza["from"]
@@ -257,7 +275,6 @@ class OmemoEchoClient(ClientXMPP):
             return
         logging.info(f"Allowing message with type: {mtype}")
 
-        namespace = xep_0384.is_encrypted(stanza)
         namespace = xep_0384.is_encrypted(stanza)
         if namespace is not None:
 
@@ -279,47 +296,22 @@ class OmemoEchoClient(ClientXMPP):
                     # Get the MUC room and sender's nick
                     muc_room = stanza["from"]
                     logging.debug(f"MUC room: {muc_room}")
+                    room_jid = stanza["from"].bare
+                    # Get the conversation history for the MUC room
+                    if room_jid not in self.mucconversation_history:
+                        self.mucconversation_history[room_jid] = []
+                        logging.debug(f"New conversation history created for MUC room {room_jid}")
 
-                    if stanza["from"] not in self.allowed_users:
-                        logging.warning(f"Received message from unauthorized user {stanza['from']}")
-                        return
+                    self.mucconversation_history[room_jid].append(user_input)
+                    if len(self.mucconversation_history[room_jid]) > self.max_history_length:
+                        self.mucconversation_history[room_jid] = self.mucconversation_history[room_jid][-self.max_history_length:]
+                        logging.debug(f"Conversation history for MUC room {room_jid} truncated to {self.max_history_length} messages")
 
-                # Get the conversation history for the MUC room
-                if mtype == "groupchat":
-                    if muc_room not in self.conversation_history:
-                        self.conversation_history[muc_room] = []
-                    conversation_history = self.conversation_history[muc_room]
-
-                    # Update the conversation history
-                    conversation_history.append(user_input)
-                    if len(conversation_history) > self.max_history_length:
-                        conversation_history = conversation_history[-self.max_history_length:]
-                    prompt = "\n".join(conversation_history)
-
-                    logging.debug(f"Sending prompt to LLaMA: {prompt}")
-                    config = {
-                        "model": "qwen2.5-coder",
-                        "device": "gpu",
-                        "num_gpu": 1,
-                        "num_thread": 8,
-                        "batch_size": 32,
-                        "quantization": {
-                            "mode": "int8"
-                        },
-                        "cache": {
-                            "type": "redis",
-                            "capacity": "12gb"
-                        },
-                        "runtime": {
-                            "compute_type": "float16",
-                            "tensor_parallel": True
-                        }
-                    }
-                    logging.debug("Invoking LLaMA...")
+                    prompt = "\n".join(self.mucconversation_history[room_jid])
+                    logging.debug(f"Conversation history for MUC room {room_jid}: {prompt}")
                     response = self.llm.invoke(prompt, config=config)
-                    logging.debug(f"Received response from LLaMA: {response}")
-
-
+                    self.mucconversation_history[room_jid].append(response)
+                    logging.debug(f"Response added to conversation history for MUC room {room_jid}: {response}")
                     if response:
                         logging.debug("Encrypting response...")
                         muc_room_jid = stanza["from"].bare  # Get the room JID from the 'from' attribute
@@ -352,23 +344,40 @@ class OmemoEchoClient(ClientXMPP):
                             logging.error(f"Exception traceback: {traceback.format_exc()}")
                     else:
                         logging.debug("No response from LLaMA")
+
+                if mtype == "chat":
+                    mfrom = stanza["from"]
+                    if mfrom not in self.conversation_history:
+                        self.conversation_history[mfrom] = []
+                        logging.debug(f"New conversation history created for user {mfrom}")
+                    self.conversation_history[mfrom].append(user_input)
+                    if len(self.conversation_history[mfrom]) > self.max_history_length:
+                        self.conversation_history[mfrom] = self.conversation_history[mfrom][-self.max_history_length:]
+                        logging.info(f"Conversation history for user {mfrom} truncated to {self.max_history_length} messages")
+                    prompt = "\n".join(self.conversation_history[mfrom])
+                    logging.debug(f"Conversation history for user {mfrom}: {prompt}")
+                    response = self.llm.invoke(prompt, config=config)
+                    self.conversation_history[mfrom].append(response)
+                    logging.debug(f"Response added to conversation history for user {mfrom}: {response}")
+                    logging.debug(f"Sending prompt to LLaMA: {prompt}")
+                    logging.debug(f"Received response from LLaMA: {response}")
+                    await self.encrypted_reply(mto, mtype, response)
+
             except Exception as e:
                 logging.error(f"Error: {e}")
                 return
-
-
 
         else:
             if stanza["type"] in {"groupchat", "chat", "normal"}:
                 if stanza["id"] in self.sent_message_ids:
                     return
                 # Handle unencrypted message
-                
                 user_input = stanza["body"]
                 logging.debug(f"User input (unencrypted): {user_input}")
 
                 # Get the MUC room and sender's nick
                 muc_room = stanza["from"]
+                room_jid = stanza["from"].bare
                 logging.debug(f"MUC room: {muc_room}")
 
                 if stanza["from"] not in self.allowed_users:
@@ -377,38 +386,21 @@ class OmemoEchoClient(ClientXMPP):
 
                 # Get the conversation history for the MUC room
                 if mtype == "groupchat":
-                    if muc_room not in self.conversation_history:
-                        self.conversation_history[muc_room] = []
-                    conversation_history = self.conversation_history[muc_room]
+                    if room_jid not in self.mucconversation_history:
+                        self.mucconversation_history[room_jid] = []
+                        logging.debug(f"New conversation history created for MUC room {room_jid}")
 
-                   # Update the conversation history
-                    conversation_history.append(user_input)
-                    if len(conversation_history) > self.max_history_length:
-                        conversation_history = conversation_history[-self.max_history_length:]
-                    prompt = "\n".join(conversation_history)
+                    self.mucconversation_history[room_jid].append(user_input)
+                    if len(self.mucconversation_history[room_jid]) > self.max_history_length:
+                        self.mucconversation_history[room_jid] = self.mucconversation_history[room_jid][-self.max_history_length:]
+                        logging.debug(f"Conversation history for MUC room {room_jid} truncated to {self.max_history_length} messages")
 
-                    logging.debug(f"Sending prompt to LLaMA: {prompt}")
-                    config = {
-                        "model": "qwen2.5-coder",
-                        "device": "gpu",
-                        "num_gpu": 1,
-                        "num_thread": 8,
-                        "batch_size": 32,
-                        "quantization": {
-                            "mode": "int8"
-                        },
-                        "cache": {
-                            "type": "redis",
-                            "capacity": "12gb"
-                        },
-                        "runtime": {
-                            "compute_type": "float16",
-                            "tensor_parallel": True
-                        }
-                    }
-                    logging.debug("Invoking LLaMA...")
+                    prompt = "\n".join(self.mucconversation_history[room_jid])
+                    logging.debug(f"Conversation history for MUC room {room_jid}: {prompt}")
                     response = self.llm.invoke(prompt, config=config)
-                    logging.debug(f"Received response from LLaMA: {response}")
+                    self.mucconversation_history[room_jid].append(response)
+                    logging.debug(f"Response added to conversation history for MUC room {room_jid}: {response}")
+
 
                     if response:
                         logging.debug("Sending response unencrypted")
@@ -424,6 +416,79 @@ class OmemoEchoClient(ClientXMPP):
                         logging.debug("No response from LLaMA")
                         return
 
+                if mtype == "chat":
+                    mfrom = stanza["from"]
+                    if mfrom not in self.conversation_history:
+                        self.conversation_history[mfrom] = []
+                        logging.debug(f"New conversation history created for user {mfrom}")
+                    self.conversation_history[mfrom].append(user_input)
+                    if len(self.conversation_history[mfrom]) > self.max_history_length:
+                        self.conversation_history[mfrom] = self.conversation_history[mfrom][-self.max_history_length:]
+                        logging.info(f"Conversation history for user {mfrom} truncated to {self.max_history_length} messages")
+                    prompt = "\n".join(self.conversation_history[mfrom])
+                    logging.debug(f"Sending prompt to LLaMA: {prompt}")
+                    response = self.llm.invoke(prompt, config=config)
+                    self.plain_reply(mto, mtype, response)
+
+    async def encrypted_reply(
+        self,
+        mto: JID,
+        mtype: Literal["chat", "normal"],
+        reply: Union[Message, str]
+    ) -> None:
+        """
+        Helper to reply with encrypted messages.
+
+        Args:
+            mto: The recipient JID.
+            mtype: The message type.
+            reply: Either the message stanza to encrypt and reply with, or the text content of the reply.
+        """
+
+        xep_0384: XEP_0384 = self["xep_0384"]
+
+        message = self.make_message(mto=mto, mtype=mtype)
+        if isinstance(reply, str):
+            message["body"] = reply
+        else:
+            message["body"] = reply["body"]
+
+        message.set_to(mto)
+        message.set_from(self.boundjid)
+
+        # It might be a good idea to strip everything but the body from the stanza, since some things might
+        # break when echoed.
+        messages, encryption_errors = await xep_0384.encrypt_message(message, mto)
+
+        if len(encryption_errors) > 0:
+            log.info(f"There were non-critical errors during encryption: {encryption_errors}")
+
+        for namespace, message in messages.items():
+            message["eme"]["namespace"] = namespace
+            message["eme"]["name"] = self["xep_0380"].mechanisms[namespace]
+
+            # Store the message ID
+            self.sent_message_ids.add(message["id"])
+
+            message.send()
+
+    def plain_reply(self, mto: JID, mtype: Literal["chat", "normal"], reply: str) -> None:
+        """
+        Helper to reply with plain messages.
+
+        Args:
+            mto: The recipient JID.
+            mtype: The message type.
+            reply: The text content of the reply.
+        """
+
+        stanza = self.make_message(mto=mto, mtype=mtype)
+        stanza["body"] = reply
+
+        # Store the message ID
+        self.sent_message_ids.add(stanza["id"])
+
+        stanza.send()
 
 if __name__ == "__main__":
     # Set up the command line argument parser
@@ -433,12 +498,12 @@ if __name__ == "__main__":
 
     # Setup the OmemoEchoClient and register plugins. Note that while plugins may have interdependencies, the
     # order in which you register them does not matter.
-    jid = 'bob@example.com'  # replace with your JID
+    jid = 'user@xmppserver.com'  # replace with your JID
     password = 'password'  # replace with your passwordxmpp = OmemoEchoClient(args.username, args.password)
-    allowed_users = ['user1@example.com/resource','user2@example.com/resource','user3@example.com/resource', 'roomid@conference.example.com/user4','roomid@conference.example.com/user3']
+    allowed_users = ['user1@xmppserver.com/resource','roomid@conference.xmppserver.com/user1']
     llama_server_url = 'http://localhost:11434'
-    room = 'roomid@conference.example.com'
-    nick = 'bot'
+    room = 'roomid@conference.xmppserver.com'
+    nick = 'Ollama'
     xmpp = OmemoEchoClient(jid, password, room, nick, allowed_users)
     xmpp.register_plugin("xep_0199")  # XMPP Ping
     xmpp.register_plugin("xep_0380")  # Explicit Message Encryption
